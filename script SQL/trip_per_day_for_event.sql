@@ -5,10 +5,7 @@ create temp table trasy as
 				t.end_station_name,
 				COUNT(*) as no_of_trips
 			from trip t
-			where t.duration in 
-				(select t.duration
-				from trip t 
-				where t.duration < 86400)
+			where t.duration < 86400
 			group by
 				t.start_station_name,
 				t.end_station_name 
