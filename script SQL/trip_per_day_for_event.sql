@@ -27,7 +27,7 @@ with CTE as (
 		on t.start_station_id = s.id 
 	inner join zip_code zc 
 		on s.city = zc.city 
-	left join weather w 
+	inner join weather w 
 		on t.start_date = w."date" and zc.zip_code = w.zip_code 
 	group by zc.city , w.events , t.subscription_type
 	) 						
