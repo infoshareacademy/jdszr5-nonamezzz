@@ -1,4 +1,120 @@
-					--- obliczenie korelacji dla 10 najpolularniejszych tras - korelacja dla pojedyñczej trasy
+					--- obliczenie korelacji dla 10 najpolularniejszych tras - (korelacja dla wszystkich 10 tras lub dla pojedyñczej trasy)
+	
+create temp table trasy as 					--------- 10 najpopularniejszych tras ze wszystkich
+		SELECT t.start_station_name,
+			t.end_station_name,
+			COUNT(*) as no_of_trips
+		from trip t
+		where t.duration < 86400
+		group by
+			t.start_station_name,
+			t.end_station_name 
+		order by no_of_trips desc
+		limit 10	
+			
+			
+create temp table trasy_subscriber as 		--------- 10 najpopularniejszych tras dla subsciber
+		SELECT t.start_station_name,
+			t.end_station_name,
+			t.subscription_type ,
+			COUNT(*) as no_of_trips
+		from trip t
+		where t.duration < 86400 and 
+			lower(t.subscription_type) = 'subscriber'
+		group by
+				t.start_station_name,
+			t.end_station_name ,
+			t.subscription_type 
+		order by no_of_trips desc
+		limit 10	
+			
+			
+create temp table trasy_customer as 		--------- 10 najpopularniejszych tras dla customer
+		SELECT t.start_station_name,
+			t.end_station_name,
+			t.subscription_type ,
+			COUNT(*) as no_of_trips
+		from trip t
+		where t.duration < 86400 and 
+			lower(t.subscription_type) = 'customer'
+		group by
+			t.start_station_name,
+			t.end_station_name ,
+			t.subscription_type 
+		order by no_of_trips desc
+		limit 10	
+			
+create temp table trasy_weekend as 		--------- 10 najpopularniejszych tras weekend
+		SELECT t.start_station_name,
+			t.end_station_name,
+			t.subscription_type ,
+			COUNT(*) as no_of_trips
+		from trip t
+		where t.duration < 86400 and 
+			EXTRACT(ISODOW FROM t.start_date) BETWEEN 6 AND 7
+		group by
+			t.start_station_name,
+			t.end_station_name ,
+			t.subscription_type 
+		order by no_of_trips desc
+		limit 10			
+		
+			
+create temp table trasy_weekdays as 		--------- 10 najpopularniejszych tras weekdays
+		SELECT t.start_station_name,
+			t.end_station_name,
+			t.subscription_type ,
+			COUNT(*) as no_of_trips
+		from trip t
+		where t.duration < 86400 and 
+			EXTRACT(ISODOW FROM t.start_date) BETWEEN 1 AND 5
+		group by
+			t.start_station_name,
+			t.end_station_name ,
+			t.subscription_type 
+		order by no_of_trips desc
+		limit 10				
+	
+		
+create temp table trasy_weekdend_customer as 		--------- 10 najpopularniejszych tras weekend & customer
+		SELECT t.start_station_name,
+			t.end_station_name,
+			t.subscription_type ,
+			COUNT(*) as no_of_trips
+		from trip t
+		where t.duration < 86400 and 
+			lower(t.subscription_type) = 'customer' and
+			EXTRACT(ISODOW FROM t.start_date) BETWEEN 6 AND 7
+		group by
+			t.start_station_name,
+			t.end_station_name ,
+			t.subscription_type 
+		order by no_of_trips desc
+		limit 10		
+			
+		
+create temp table trasy_weekday_customer as 		--------- 10 najpopularniejszych tras weekdays & customer
+		SELECT t.start_station_name,
+			t.end_station_name,
+			t.subscription_type ,
+			COUNT(*) as no_of_trips
+		from trip t
+		where t.duration < 86400 and 
+			lower(t.subscription_type) = 'customer' and
+			EXTRACT(ISODOW FROM t.start_date) BETWEEN 1 AND 5
+		group by
+			t.start_station_name,
+			t.end_station_name ,
+			t.subscription_type 
+		order by no_of_trips desc
+		limit 10		
+		
+select *
+from trasy_weekday_customer
+					
+
+
+---- korelacja dla 10 najpopularniejszych tras (ten sam skrypt dla wszystkich tras, subscriber type lub pojedyñczej trasy)
 					
 with corr_CTE as
 	(
@@ -29,7 +145,9 @@ with corr_CTE as
 		on s.city = zc.city 
 	left join weather w 
 		on t.start_date = w."date" and zc.zip_code = w.zip_code
-	where t.duration < 86400 --and trim(ltrim(lower(t.subscription_type))) = 'subscriber'	
+	where t.duration < 86400 and t.start_station_name in 
+								(select start_station_name 
+								from trasy_weekday_customer)	
 	group by t.start_station_name ,
 			t.end_station_name , 
 			w."date" ,
@@ -42,7 +160,7 @@ with corr_CTE as
 			w.mean_visibility_miles ,
 			w.precipitation_inches ,
 			w.events 
-	having 	t.start_station_name = 'Steuart at Market' and 	t.end_station_name = '2nd at Townsend'
+	--having 	t.start_station_name = 'Steuart at Market' and 	t.end_station_name = '2nd at Townsend'
 	order by w."date"
 	)
 select round((corr(total_trips, cloud_cover)):: numeric, 3) as total_trips_cloud_cover ,
