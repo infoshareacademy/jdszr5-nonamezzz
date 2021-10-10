@@ -130,19 +130,13 @@ FROM
 	) AS tmp
 LIMIT 10;
 
-/*Trochę statystyki powiązanej z pogodą - tutaj też wrzucam przykładowy parametr - będzi ich trochę więcej prawdopodobnie*/
+/*Trochę statystyki powiązanej z pogodą - cloud cover/mean_temp, events */
 /*cloud_cover ogólny*/
-SELECT 
-	cloud_cover, 
-	zip_code, 
-	count(start_station_id)/count(DISTINCT start_date::date) avg_no_of_trips 
-FROM routes_distance_weather rdw
-GROUP BY 
-	cloud_cover, 
-	zip_code
+SELECT cloud_cover, zip_code, count(start_station_id)/count(DISTINCT start_date::date) avg_no_of_trips FROM routes_distance_weather rdw
+GROUP BY cloud_cover, zip_code
 ORDER BY zip_code;
 
-/*cloud_cover pon-ptk*/
+/*cloud_cover weekend*/
 SELECT 
 	cloud_cover, 
 	zip_code, 
@@ -153,8 +147,7 @@ GROUP BY
 	cloud_cover,
 	zip_code
 ORDER BY zip_code;
-
-/*cloud_cover w tygodniu*/
+/*cloud_cover pon-ptk*/
 SELECT 
 	cloud_cover, 
 	zip_code, 
@@ -166,7 +159,83 @@ GROUP BY
 	zip_code
 ORDER BY zip_code;
 
-* Jak się najpopularniejsze trasy zmieniają z pogodą jako średnia wycieczek na event,
+/*events*/
+SELECT 
+	events,
+	zip_code,
+	count(start_station_id)/count(DISTINCT start_date::date) avg_no_of_trips,
+	count(DISTINCT start_date::date) 
+FROM routes_distance_weather rdw 
+GROUP BY 
+	events, 
+	zip_code
+ORDER BY zip_code;
+
+/*events weekend*/
+SELECT 
+	events,
+	zip_code,
+	count(start_station_id)/count(DISTINCT start_date::date) avg_no_of_trips,
+	count(DISTINCT start_date::date)  
+FROM routes_distance_weather rdw
+WHERE EXTRACT(ISODOW FROM rdw."start_date") BETWEEN 6 AND 7
+GROUP BY 
+	events, 
+	zip_code
+ORDER BY zip_code;
+/*events pon-ptk*/
+SELECT 
+	events,
+	zip_code,
+	count(start_station_id)/count(DISTINCT start_date::date) avg_no_of_trips,
+	count(DISTINCT start_date::date) 
+FROM routes_distance_weather rdw
+WHERE EXTRACT(ISODOW FROM rdw."start_date") BETWEEN 1 AND 5
+GROUP BY 
+	events, 
+	zip_code
+ORDER BY zip_code;
+
+/*mean_temperature_f*/
+
+SELECT 
+	mean_temperature_f,
+	zip_code,
+	count( start_station_id)/count(DISTINCT start_date::date) avg_no_of_trips, count(start_station_id),
+	count(DISTINCT start_date::date) 
+FROM routes_distance_weather rdw 
+GROUP BY 
+	mean_temperature_f, 
+	zip_code
+ORDER BY zip_code;
+
+/*mean_temperature_f weekend*/
+SELECT 
+	mean_temperature_f,
+	zip_code,
+	count( start_station_id)/count(DISTINCT start_date::date) avg_no_of_trips, count(start_station_id),
+	count(DISTINCT start_date::date)
+FROM routes_distance_weather rdw
+WHERE EXTRACT(ISODOW FROM rdw."start_date") BETWEEN 6 AND 7
+GROUP BY 
+	mean_temperature_f, 
+	zip_code
+ORDER BY zip_code;
+/*mean_temperature_f pon-ptk*/
+SELECT 
+	mean_temperature_f,
+	zip_code,
+	count( start_station_id)/count(DISTINCT start_date::date) avg_no_of_trips, count(start_station_id),
+	count(DISTINCT start_date::date)
+FROM routes_distance_weather rdw
+WHERE EXTRACT(ISODOW FROM rdw."start_date") BETWEEN 1 AND 5
+GROUP BY 
+	mean_temperature_f, 
+	zip_code
+ORDER BY zip_code;
+
+
+/* Jak się najpopularniejsze trasy zmieniają z pogodą jako średnia wycieczek na event,
  *  najpierw potworzone rankingi a potem jak te trasy z rankingów zmieniają się z pogodą - rankigi różne - ogólny pon/ptk, weekend*/
 CREATE TEMP TABLE top_routes as 
 	(SELECT 
@@ -247,8 +316,9 @@ CREATE TEMP TABLE top_routes_weekend as
 		) AS tmp
 	LIMIT 10
 		);
+where start_station_name in (select trasy.start_station_name from trasy);
 
-/*cloud cover ogólne stat*/
+/*cloud cover wszystkie dni - top 10 tras*/
 SELECT DISTINCT
 	rdw.start_station_id,
 	rdw.start_station_name,
@@ -268,7 +338,7 @@ GROUP BY
 	zip_code
 ORDER BY zip_code;
 
-/*cloud cover weekend stat ale te same trasy*/
+/*cloud cover weekend - trasy ranking ogólny */
 SELECT DISTINCT
 	rdw.start_station_id,
 	rdw.start_station_name,
@@ -288,7 +358,7 @@ GROUP BY
 	zip_code
 ORDER BY zip_code;
 
-/*cloud cover weekend stat ale trasy weekendowe*/
+/*cloud cover weekend - trasy weekendowe*/
 SELECT DISTINCT
 	rdw.start_station_id,
 	rdw.start_station_name,
@@ -307,7 +377,7 @@ GROUP BY
 	cloud_cover,
 	zip_code;
 
-/*cloud cover pon_ptk stat ale te same trasy*/
+/*cloud cover pon_ptk stat - trasy ranking ogólny*/
 SELECT DISTINCT
 	rdw.start_station_id,
 	rdw.start_station_name,
@@ -327,7 +397,7 @@ GROUP BY
 	zip_code
 ORDER BY zip_code;
 
-/*cloud cover weekend stat ale trasy pon-ptk*/
+/*cloud cover pon-ptk - trasy pon-ptk*/
 SELECT DISTINCT
 	rdw.start_station_id,
 	rdw.start_station_name,
@@ -345,7 +415,6 @@ GROUP BY
 	rdw.end_station_name,
 	cloud_cover,
 	zip_code;
-
 
 
 
