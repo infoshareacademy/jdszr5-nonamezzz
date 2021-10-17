@@ -1,0 +1,390 @@
+
+
+---Tabele do projektu
+
+--tabela bikes_date
+
+create table bikes_date as (
+select 
+	split_part(t.start_date::text, ' ',1) "date",
+	t.start_station_name, 
+	t.start_station_id, 
+	count(t.bike_id) as number_of_bikes,
+	s.city 
+from trip t
+left join station s 
+on t.start_station_id = s.id 
+group by "date", 
+	start_station_name, 
+	start_station_id, s.city 
+order by "date", 
+	number_of_bikes desc
+);
+
+--tabela city_weather - pogoda wg miast w danym dniu
+
+create table city_weather as (
+select 
+	distinct t.start_date::date,
+	zc.city,
+	w.mean_temperature_f, 
+	w.cloud_cover,
+	w.mean_visibility_miles,
+	w.mean_wind_speed_mph, 
+	w.events 
+from trip t 
+left join station s
+on t.start_station_id = s.id 
+inner join zip_code zc 
+on s.city = zc.city 
+join weather w 
+on t.start_date::date = w."date" and zc.zip_code = w.zip_code
+group by zc.city,
+	t.start_date,
+	w.cloud_cover,
+	w.mean_temperature_f,
+	w.mean_visibility_miles,
+	w.mean_wind_speed_mph,
+	w.events) ;
+
+--Tabela bikes_weather_date
+
+create table bikes_weather_date as (
+select 
+	bd."date" ,
+	to_char(bd."date", 'day') as "day",
+	to_char(bd."date", 'month') as "month",
+	bd.start_station_id ,
+	bd.start_station_name ,
+	bd.number_of_bikes ,
+	bd.city ,
+	cw.mean_temperature_f ,
+	cw.mean_visibility_miles ,
+	cw.mean_wind_speed_mph ,
+	cw.cloud_cover ,
+	cw.events 
+from bikes_date bd 
+join city_weather cw 
+on bd."date" = cw.start_date and bd.city =cw.city );
+
+--tabela avg_bikes_date
+
+create table avg_bikes_date as (
+select
+	s."time" ::date as "date",
+	s.station_id ,
+	round(avg(s.bikes_available)::numeric,2) as "avg_bikes",
+	round(avg(s.docks_available)::numeric,2) as "avg_docks"
+from status s 
+group by s.station_id ,
+	 "date"
+order by "date", 
+	s.station_id 
+);
+
+--tabela bikes_avg_availability_weather
+
+create table bikes_avg_availability_weather as (
+select 
+	bwd."date",
+	bwd.start_station_id ,
+	bwd.start_station_name ,
+	bwd.number_of_bikes ,
+	bwd.city ,
+	public.avg_bikes_date.avg_bikes,
+	public.avg_bikes_date.avg_docks,
+	bwd.mean_temperature_f,
+	bwd.mean_visibility_miles ,
+	bwd.mean_wind_speed_mph ,
+	bwd.cloud_cover ,
+	bwd.events 
+from bikes_weather_date bwd 
+left join public.avg_bikes_date 
+on bwd.start_station_id = public.avg_bikes_date.station_id and bwd."date" = public.avg_bikes_date."date" 
+group by bwd.start_station_id, 
+	bwd.start_station_name, 
+	bwd."date",
+	bwd.number_of_bikes , 
+	bwd.city , 
+	public.avg_bikes_date.avg_bikes , 
+	public.avg_bikes_date.avg_docks ,
+	bwd.mean_temperature_f , 
+	bwd.mean_visibility_miles , 
+	bwd.mean_wind_speed_mph , 
+	bwd.cloud_cover ,
+	bwd.events 
+order by "date");
+
+select * from bikes_avg_availability_weather;
+
+
+--Tabela rankingi 
+
+
+create table rankingi as (
+select
+	baaw.date,
+	to_char(baaw."date", 'MM-YYYY') as "month_year",
+	date_part('month', baaw."date") as "month",
+	date_part('year', baaw."date") as "year",
+	to_char(baaw."date", 'day') as "day",
+	baaw.start_station_id,
+	baaw.start_station_name,
+	baaw.number_of_bikes,
+	dense_rank() over (partition by baaw."date" order by baaw.number_of_bikes desc) as bikes_rank,
+	baaw.city,
+	baaw.mean_temperature_f ,
+	dense_rank () over (partition by baaw."date" order by baaw.mean_temperature_f desc) as temperature_rank,
+	baaw.mean_visibility_miles ,
+	dense_rank () over (partition by baaw."date" order by baaw.mean_visibility_miles ) as visibility_rank,
+	baaw.mean_wind_speed_mph ,
+	dense_rank () over (partition by baaw."date" order by baaw.mean_wind_speed_mph ) as wind_rank,
+	baaw.cloud_cover,
+	dense_rank () over (partition by baaw."date" order by baaw.cloud_cover) as cloud_rank,
+	baaw.events 
+from bikes_avg_availability_weather baaw
+group by baaw.date, 
+	baaw.start_station_id, 
+	baaw.start_station_name, 
+	baaw.number_of_bikes,
+	baaw.mean_temperature_f, 
+	baaw.mean_visibility_miles , 
+	baaw.mean_wind_speed_mph ,
+	baaw.cloud_cover, 
+	baaw.city , 
+	baaw.events 
+order by baaw."date", 
+	baaw.number_of_bikes desc
+);
+
+
+/*Iloœæ stacji oraz miejsc rowerowych w poszczególnych miastach*/ 
+
+select 
+	s.city,
+	count(s.name) as total_stations,
+	sum(s.dock_count) as total_dock_count_availability
+from station s 
+group by s.city
+order by total_dock_count_availability desc;
+
+/*Iloœæ rowerów, która wyjecha³a z danego miasta w badanym okresie niezale¿nie od warunków pogodowych*/ 
+
+select 
+	r.city, 
+	sum(r.number_of_bikes) as "total_bikes"
+from rankingi r 
+group by  r.city 
+order by sum(r.number_of_bikes) desc;
+
+
+
+
+/*Liczba wypo¿yczonych rowerów wg miesiêcy*/ 
+
+select 
+	bwd."month",
+case 
+	when bwd."month" ilike '%january%' then 
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%february%' then
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%march%' then 
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%april%' then 
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%may%' then 
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%june%' then 
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%july%' then
+		sum(bwd.number_of_bikes) 
+	when bwd."month"ilike '%august%' then
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%september%' then
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%october%' then
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%november%' then
+		sum(bwd.number_of_bikes) 
+	when bwd."month" ilike '%december%' then
+		sum(bwd.number_of_bikes) 
+end as "bikes_per_month"
+from bikes_weather_date bwd 
+group by bwd."month";
+
+
+/*Œrednia liczba rowerów, która zosta³a wypo¿yczona w poszczególne dni tygodnia*/ 
+
+select 
+	bwd."day",
+case 
+	when bwd."day" ilike '%monday%' then 
+		round(avg(bwd.number_of_bikes):: numeric,2) 
+	when bwd."day" ilike '%tuesday%' then 
+		round(avg(bwd.number_of_bikes):: numeric,2) 
+	when bwd."day" ilike '%wednesday%' then 
+		round(avg(bwd.number_of_bikes):: numeric,2) 
+	when bwd."day" ilike '%thursday%' then 
+		round(avg(bwd.number_of_bikes):: numeric,2)
+	when bwd."day" ilike '%friday%' then 
+		round(avg(bwd.number_of_bikes):: numeric,2) 
+	when bwd."day" ilike '%saturday%' then 
+		round(avg(bwd.number_of_bikes):: numeric,2)
+	when bwd."day" ilike '%sunday%' then 
+		round(avg(bwd.number_of_bikes):: numeric,2) 
+end as "avg_bikes"
+from bikes_weather_date bwd 
+group by bwd."day"
+order by "avg_bikes"desc;
+
+/*Liczba wypo¿yczonych rowerów w poszczególnych godzinach*/
+
+select 
+	split_part(date_trunc('hour', t.start_date)::text, ' ',2) "time", 
+	count(t.bike_id) as total_bikes
+from trip t
+group by "time"
+order by "time"
+
+
+/*Liczba oddanych rowerów w poszczególnych godzinach*/
+select 
+	split_part(date_trunc('hour', t.end_date)::text, ' ',2) "time", 
+	count(t.bike_id) as total_bikes
+from trip t
+group by "time"
+order by "time"
+
+-- Najbardziej popularne stacje w ka¿dym z badanych miesiêcy wg liczby wypo¿yczonych tam rowerów
+
+create table Hbikes_stations_date as (
+select
+	to_char(bwd."date", 'MM-YYYY') as "month_year",
+	bwd.start_station_name ,
+	sum(bwd.number_of_bikes) as "sum_number_of_bikes"
+from bikes_weather_date bwd
+group by to_char(bwd."date", 'MM-YYYY'), 
+	bwd.start_station_name
+order by to_char(bwd."date", 'MM-YYYY')desc);
+
+select * from Hbikes_stations_date ;
+
+
+with stations_popularity_CTE as (select 
+	hsd.month_year, 
+	hsd.start_station_name, 
+	max(hsd.sum_number_of_bikes) as "sum_of_bikes",
+	dense_rank () over (partition by month_year order by max(hsd.sum_number_of_bikes) desc ) as "ranking"
+from hbikes_stations_date hsd
+group by hsd.month_year, 
+	hsd.start_station_name 
+order by hsd.month_year, 
+	"sum_of_bikes" desc
+)
+select
+	month_year, 
+	start_station_name,
+	sum_of_bikes
+from stations_popularity_CTE
+where ranking = 1 
+
+
+--- Korelacja z eventami i warunkami atmosferycznymi
+
+with corr_CTE as
+	(
+	select t.start_station_name ,
+		w."date" ,
+		count(t.bike_id) as total_bikes ,
+		w.cloud_cover ,
+		w.min_temperature_f ,
+		w.mean_temperature_f ,
+		w.max_temperature_f ,
+		w.mean_wind_speed_mph ,
+		w.mean_visibility_miles, 
+		w."max_wind_Speed_mph" ,
+	case
+		when w.precipitation_inches = 'T' then 0 :: numeric
+		else w.precipitation_inches :: numeric
+		end as percipitation ,
+	case when lower(w.events) = 'rain' then 1 else 0  end as rain ,
+	case when lower(w.events) = 'rain-thunderstorm' then 1 else 0  end as rain_thunderstorm ,
+	case when lower(w.events) = 'fog' then 1 else 0  end as fog ,
+	case when lower(w.events) = 'fog-rain' then 1 else 0  end as fog_rain,
+	case when lower(w.events) = '' then 1 else 0 end as no_event
+	from trip t
+	left join station s
+	on t.start_station_id = s.id
+	inner join zip_code zc
+	on s.city = zc.city
+	left join weather w
+	on t.start_date = w."date" and zc.zip_code = w.zip_code	
+	group by t.start_station_name ,
+			w."date" ,
+			w.cloud_cover ,
+			w.min_temperature_f ,
+			w.mean_temperature_f ,
+			w.max_temperature_f ,
+			w.mean_wind_speed_mph ,
+			w."max_wind_Speed_mph" ,
+			w.precipitation_inches ,
+			w.mean_visibility_miles, 
+			w.events
+	order by w."date"
+	)
+select round((corr(total_bikes, cloud_cover)):: numeric, 3) as total_bikes_cloud_cover ,
+	round((corr(total_bikes, min_temperature_f)):: numeric, 3) as total_bikes_min_temperature ,
+	round((corr(total_bikes, mean_temperature_f)):: numeric, 3) as total_bikes_mean_temperature ,
+	round((corr(total_bikes, mean_visibility_miles)):: numeric, 3) as total_bikes_mean_visibility ,
+	round((corr(total_bikes, max_temperature_f)):: numeric, 3) as total_bikes_max_temperature ,
+	round((corr(total_bikes, mean_wind_speed_mph)):: numeric, 3) as total_bikes_mean_wind_speed_mph ,
+	round((corr(total_bikes, "max_wind_Speed_mph")):: numeric, 3) as total_bikes_max_wind_speed_mph ,
+	round((corr(total_bikes, percipitation)):: numeric, 3) as total_bikes_percipitation ,
+	round((corr(total_bikes, rain)):: numeric, 3) as total_bikes_rain ,
+	round((corr(total_bikes, rain_thunderstorm)):: numeric, 3) as total_bikes_rain_thunderstorm ,
+	round((corr(total_bikes, fog)):: numeric, 3) as total_bikes_fog ,
+	round((corr(total_bikes, fog_rain)):: numeric, 3) as total_bikes_fog_rain,
+	round((corr(total_bikes, no_event)):: numeric, 3) as total_bikes_no_event 
+from corr_CTE
+
+
+--sprawdzenie ile srednio rowerow wyjezdza w dni bez eventu i z eventem
+
+select
+	r.events,
+case 
+	when lower(r.events) = '' then count(distinct(r."date"))
+	when lower(r.events) = 'rain-thunderstorm' then count(distinct(r."date"))
+	when lower(r.events) = 'rain' then count(distinct(r."date"))
+	when lower(r.events) = 'fog' then count(distinct(r."date"))
+	when lower(r.events) = 'fog-rain' then count(distinct(r."date"))
+end as total_days,
+case 
+	when lower(r.events) = '' then sum(r.number_of_bikes)
+	when lower(r.events) = 'rain-thunderstorm' then sum(r.number_of_bikes)
+	when lower(ltrim(r.events)) = 'rain' then sum(r.number_of_bikes)
+	when lower(r.events) = 'fog' then sum(r.number_of_bikes)
+	when lower(r.events) = 'fog-rain' then sum(r.number_of_bikes)
+	end as total_bikes,
+case 
+	when lower(r.events) = '' then round(sum(r.number_of_bikes)/count(distinct(r."date"))::numeric,2)
+	when lower(r.events) = 'rain-thunderstorm' then round(sum(r.number_of_bikes)/count(distinct(r."date"))::numeric,2)
+	when lower(ltrim(r.events)) = 'rain' then round(sum(r.number_of_bikes)/count(distinct(r."date"))::numeric,2)
+	when lower(r.events) = 'fog' then round(sum(r.number_of_bikes)/count(distinct(r."date"))::numeric,2)
+	when lower(r.events) = 'fog-rain' then round(sum(r.number_of_bikes)/count(distinct(r."date"))::numeric,2)
+end as bikes_per_days
+from rankingi r 
+where lower(r.city)= 'san francisco'
+group by r.events
+
+
+select count(*),
+	w.zip_code ,
+	w.events 
+from weather w 
+group by w.zip_code , w.events 
+order by w.zip_code 
+
+
+
