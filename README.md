@@ -1,5 +1,7 @@
 # nonamezzz
 ### Basia Gradzik - Hupało
+* barbara.gradzikhupalo@gmail.com
+* https://www.linkedin.com/in/barbara-gradzikhupalo/
 ### Iwona Onuszko
 ### Michał Mielniczek
 * micmielniczek@gmail.com
