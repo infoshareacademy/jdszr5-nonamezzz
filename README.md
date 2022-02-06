@@ -3,6 +3,8 @@
 * barbara.gradzikhupalo@gmail.com
 * https://www.linkedin.com/in/barbara-gradzikhupalo/
 ### Iwona Onuszko
+* ihalasz@wp.pl
+* https://www.linkedin.com/in/iwona-onuszko/
 ### Michał Mielniczek
 * micmielniczek@gmail.com
 * https://www.linkedin.com/in/michal-mielniczek/
